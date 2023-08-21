@@ -1,4 +1,4 @@
-
+// SPDX-License-Identifier: MIT 
 
 pragma solidity 0.8.19;
 
@@ -450,8 +450,9 @@ contract MysteryBoxGame is Ownable, ERC20 {
         } else if (isSepolia()) {
             router = IUniswapV2Router02(0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008);
         } else {
-            require(block.chainid == 1, "expected mainnet");
-            router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+            //require(block.chainid == 1, "expected mainnet");
+            //router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+            require(block.chainid == 31337, "expected hardhat");
         }
         factory = IUniswapV2Factory(router.factory());
 

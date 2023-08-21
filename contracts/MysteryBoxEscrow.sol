@@ -708,7 +708,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
 }
 
 
-contract TelegramRussianRoulette is Ownable {
+contract TelegramMysteryBox is Ownable {
     address public revenueWallet;
     MysteryBoxGame public immutable bettingToken;
     uint256 public immutable minimumBet;
