@@ -8,6 +8,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
+    "@uniswap/v3-core": "^1.0.1",
     "solmate": "^6.2.0"
   }
 }

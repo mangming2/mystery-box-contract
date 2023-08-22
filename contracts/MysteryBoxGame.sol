@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT 
 
 pragma solidity 0.8.19;
+import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
+import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolImmutables.sol';
+import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol';
+import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolDerivedState.sol';
+import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolActions.sol';
+import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolOwnerActions.sol';
+import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolEvents.sol';
+
 
 
 abstract contract ERC20 {
@@ -199,6 +207,182 @@ abstract contract Ownable is Context {
         _owner = newOwner;
         emit OwnershipTransferred(oldOwner, newOwner);
     }
+}
+
+
+
+/// @title The interface for the Uniswap V3 Factory
+/// @notice The Uniswap V3 Factory facilitates creation of Uniswap V3 pools and control over the protocol fees
+interface IUniswapV3Factory {
+    /// @notice Emitted when the owner of the factory is changed
+    /// @param oldOwner The owner before the owner was changed
+    /// @param newOwner The owner after the owner was changed
+    event OwnerChanged(address indexed oldOwner, address indexed newOwner);
+
+    /// @notice Emitted when a pool is created
+    /// @param token0 The first token of the pool by address sort order
+    /// @param token1 The second token of the pool by address sort order
+    /// @param fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
+    /// @param tickSpacing The minimum number of ticks between initialized ticks
+    /// @param pool The address of the created pool
+    event PoolCreated(
+        address indexed token0,
+        address indexed token1,
+        uint24 indexed fee,
+        int24 tickSpacing,
+        address pool
+    );
+
+    /// @notice Emitted when a new fee amount is enabled for pool creation via the factory
+    /// @param fee The enabled fee, denominated in hundredths of a bip
+    /// @param tickSpacing The minimum number of ticks between initialized ticks for pools created with the given fee
+    event FeeAmountEnabled(uint24 indexed fee, int24 indexed tickSpacing);
+
+    /// @notice Returns the current owner of the factory
+    /// @dev Can be changed by the current owner via setOwner
+    /// @return The address of the factory owner
+    function owner() external view returns (address);
+
+    /// @notice Returns the tick spacing for a given fee amount, if enabled, or 0 if not enabled
+    /// @dev A fee amount can never be removed, so this value should be hard coded or cached in the calling context
+    /// @param fee The enabled fee, denominated in hundredths of a bip. Returns 0 in case of unenabled fee
+    /// @return The tick spacing
+    function feeAmountTickSpacing(uint24 fee) external view returns (int24);
+
+    /// @notice Returns the pool address for a given pair of tokens and a fee, or address 0 if it does not exist
+    /// @dev tokenA and tokenB may be passed in either token0/token1 or token1/token0 order
+    /// @param tokenA The contract address of either token0 or token1
+    /// @param tokenB The contract address of the other token
+    /// @param fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
+    /// @return pool The pool address
+    function getPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) external view returns (address pool);
+
+    /// @notice Creates a pool for the given two tokens and fee
+    /// @param tokenA One of the two tokens in the desired pool
+    /// @param tokenB The other of the two tokens in the desired pool
+    /// @param fee The desired fee for the pool
+    /// @dev tokenA and tokenB may be passed in either order: token0/token1 or token1/token0. tickSpacing is retrieved
+    /// from the fee. The call will revert if the pool already exists, the fee is invalid, or the token arguments
+    /// are invalid.
+    /// @return pool The address of the newly created pool
+    function createPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) external returns (address pool);
+
+    /// @notice Updates the owner of the factory
+    /// @dev Must be called by the current owner
+    /// @param _owner The new owner of the factory
+    function setOwner(address _owner) external;
+
+    /// @notice Enables a fee amount with the given tickSpacing
+    /// @dev Fee amounts may never be removed once enabled
+    /// @param fee The fee amount to enable, denominated in hundredths of a bip (i.e. 1e-6)
+    /// @param tickSpacing The spacing between ticks to be enforced for all pools created with the given fee amount
+    function enableFeeAmount(uint24 fee, int24 tickSpacing) external;
+}
+
+/// @title Router token swapping functionality
+/// @notice Functions for swapping tokens via Uniswap V3
+interface ISwapRouter is IUniswapV3SwapCallback {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    /// @notice Swaps `amountIn` of one token for as much as possible of another token
+    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
+
+    struct ExactOutputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountOut;
+        uint256 amountInMaximum;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    /// @notice Swaps as little as possible of one token for `amountOut` of another token
+    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata
+    /// @return amountIn The amount of the input token
+    function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn);
+
+    struct ExactOutputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountOut;
+        uint256 amountInMaximum;
+    }
+
+    /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
+    /// @return amountIn The amount of the input token
+    function exactOutput(ExactOutputParams calldata params) external payable returns (uint256 amountIn);
+}
+
+
+/// @title The interface for a Uniswap V3 Pool
+/// @notice A Uniswap pool facilitates swapping and automated market making between any two assets that strictly conform
+/// to the ERC20 specification
+/// @dev The pool interface is broken up into many smaller pieces
+interface IUniswapV3Pool is
+    IUniswapV3PoolImmutables,
+    IUniswapV3PoolState,
+    IUniswapV3PoolDerivedState,
+    IUniswapV3PoolActions,
+    IUniswapV3PoolOwnerActions,
+    IUniswapV3PoolEvents
+{
+
+}
+
+interface IUniswapV3PoolDeployer {
+    /// @notice Get the parameters to be used in constructing the pool, set transiently during pool creation.
+    /// @dev Called by the pool constructor to fetch the parameters of the pool
+    /// Returns factory The factory address
+    /// Returns token0 The first token of the pool by address sort order
+    /// Returns token1 The second token of the pool by address sort order
+    /// Returns fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
+    /// Returns tickSpacing The minimum number of ticks between initialized ticks
+    function parameters()
+        external
+        view
+        returns (
+            address factory,
+            address token0,
+            address token1,
+            uint24 fee,
+            int24 tickSpacing
+        );
 }
 
 interface IUniswapV2Factory {
@@ -409,9 +593,17 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
  */
 contract MysteryBoxGame is Ownable, ERC20 {
 
-    IUniswapV2Router02 public router;
-    IUniswapV2Factory public factory;
-    IUniswapV2Pair public pair;
+    ISwapRouter public router;
+    IUniswapV2Router02 public router2;
+    IUniswapV3Factory public factory;
+    IUniswapV3Pool public pool;
+    IUniswapV3PoolDeployer public poolDeployer;
+
+//
+//
+    // IUniswapV2Router02 public router;
+    // IUniswapV2Factory public factory;
+    // IUniswapV2Pair public pair;
 
     uint private constant INITIAL_SUPPLY = 10_000_000 * 10**8;
 
@@ -446,17 +638,19 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
     constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
-            router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+            router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
         } else if (isSepolia()) {
-            router = IUniswapV2Router02(0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008);
+            router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
         } else {
             //require(block.chainid == 1, "expected mainnet");
             //router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
             require(block.chainid == 31337, "expected hardhat");
         }
-        factory = IUniswapV2Factory(router.factory());
 
-        // Approve infinite spending by DEX, to sell tokens collected via tax.
+        //factory = IUniswapV2Factory(router.factory());
+        factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+
+        // Approve infinite spending by DEX, to sell tokens collected via tax. DEX에서 이 토큰을 거래할 수 있도록 승인
         allowance[address(this)][address(router)] = type(uint).max;
         emit Approval(address(this), address(router), type(uint).max);
 
@@ -564,15 +758,26 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
         _mint(address(this), INITIAL_SUPPLY * LP_BPS / 10_000);
 
-        router.addLiquidityETH{ value: msg.value }(
-            address(this),
-            balanceOf[address(this)],
-            0,
-            0,
-            owner(),
-            block.timestamp);
+        // router.addLiquidityETH{ value: msg.value }(
+        //     address(this),
+        //     balanceOf[address(this)],
+        //     0,
+        //     0,
+        //     owner(),
+        //     block.timestamp);
 
-        pair = IUniswapV2Pair(factory.getPair(address(this), router.WETH()));
+      
+
+        // Uniswap V3에서 유동성을 추가하는 방식
+        address address2 = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
+        
+        pool = IUniswapV3Pool(factory.getPool(address(this), address2, 3000));
+
+        factory.createPool(address(this), address2, 3000);
+
+
+
+       
 
         _mint(marketingWallet, INITIAL_SUPPLY * MARKETING_BPS / 10_000);
 
@@ -592,10 +797,10 @@ contract MysteryBoxGame is Ownable, ERC20 {
             //
             // Also for this contract selling the collected tax.
             return 0;
-        } else if (from == address(pair)) {
+        } else if (from == address(pool)) {
             // Buy from DEX, or adding liquidity.
             return amount * buyTaxBps / 10_000;
-        } else if (to == address(pair)) {
+        } else if (to == address(pool)) {
             // Sell from DEX, or removing liquidity.
             return amount * sellTaxBps / 10_000;
         } else {
@@ -615,22 +820,38 @@ contract MysteryBoxGame is Ownable, ERC20 {
         // Sell
         address[] memory path = new address[](2);
         path[0] = address(this);
-        path[1] = router.WETH();
-        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        //path[1] = router.WETH();
+        path[1] = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
+        // router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        //     tokensToSwap,
+        //     0,
+        //     path,
+        //     address(this),
+        //     block.timestamp
+        // );
+
+        int256 amount0Received;
+        int256 amount1Received;
+        (amount0Received, amount1Received) = pool.swap(
+            address(this),
+            false,
             tokensToSwap,
             0,
-            path,
-            address(this),
-            block.timestamp
+            bytes("")
         );
 
-        router.addLiquidityETH{ value: address(this).balance }(
-            address(this),
-            tokensForLiq,
-            0,
-            0,
-            owner(),
-            block.timestamp);
+
+
+
+        // router.addLiquidityETH{ value: address(this).balance }(
+        //     address(this),
+        //     tokensForLiq,
+        //     0,
+        //     0,
+        //     owner(),
+        //     block.timestamp);
+
+        pool.
 
         myWallet.call{value: address(this).balance}("");
     }
@@ -653,7 +874,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
         }
 
 
-        if (balanceOf[address(this)] > getMinSwapAmount() && !isSellingCollectedTaxes && from != address(pair) && from != address(this)) {
+        if (balanceOf[address(this)] > getMinSwapAmount() && !isSellingCollectedTaxes && from != address(pool) && from != address(this)) {
             sellCollectedTaxes();
         }
 
