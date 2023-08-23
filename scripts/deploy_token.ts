@@ -5,6 +5,7 @@ async function main() {
     "contracts/MysteryBoxGame.sol:MysteryBoxGame"
   );
   const mysteryBoxGame = await MysteryBoxGame.deploy();
+  console.log(`MysteryBoxGame deployed to ${mysteryBoxGame.getAddress()}`);
 }
 
 main()

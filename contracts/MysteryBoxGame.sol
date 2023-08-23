@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT 
 
 pragma solidity 0.8.19;
+
 import '@openzeppelin/contracts/token/ERC721/IERC721Metadata.sol';
 import '@openzeppelin/contracts/token/ERC721/IERC721Enumerable.sol';
+
 import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
 import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolImmutables.sol';
 import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol';
@@ -17,22 +19,53 @@ import '@uniswap/v3-periphery/contracts/interfaces/IPoolInitializer.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/IERC721Permit.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/IPeripheryPayments.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol';
-import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
+//import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
 
 
 
 abstract contract ERC20 {
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
     event Transfer(address indexed from, address indexed to, uint256 amount);
+
     event Approval(address indexed owner, address indexed spender, uint256 amount);
+
+    /*//////////////////////////////////////////////////////////////
+                            METADATA STORAGE
+    //////////////////////////////////////////////////////////////*/
+
     string public name;
+
     string public symbol;
+
     uint8 public immutable decimals;
+
+    /*//////////////////////////////////////////////////////////////
+                              ERC20 STORAGE
+    //////////////////////////////////////////////////////////////*/
+
     uint256 public totalSupply;
+
     mapping(address => uint256) public balanceOf;
+
     mapping(address => mapping(address => uint256)) public allowance;
+
+    /*//////////////////////////////////////////////////////////////
+                            EIP-2612 STORAGE
+    //////////////////////////////////////////////////////////////*/
+
     uint256 internal immutable INITIAL_CHAIN_ID;
+
     bytes32 internal immutable INITIAL_DOMAIN_SEPARATOR;
+
     mapping(address => uint256) public nonces;
+
+    /*//////////////////////////////////////////////////////////////
+                               CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
     constructor(
         string memory _name,
         string memory _symbol,
@@ -45,6 +78,10 @@ abstract contract ERC20 {
         INITIAL_CHAIN_ID = block.chainid;
         INITIAL_DOMAIN_SEPARATOR = computeDomainSeparator();
     }
+
+    /*//////////////////////////////////////////////////////////////
+                               ERC20 LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     function approve(address spender, uint256 amount) public virtual returns (bool) {
         allowance[msg.sender][spender] = amount;
@@ -90,6 +127,10 @@ abstract contract ERC20 {
         return true;
     }
 
+    /*//////////////////////////////////////////////////////////////
+                             EIP-2612 LOGIC
+    //////////////////////////////////////////////////////////////*/
+
     function permit(
         address owner,
         address spender,
@@ -101,6 +142,8 @@ abstract contract ERC20 {
     ) public virtual {
         require(deadline >= block.timestamp, "PERMIT_DEADLINE_EXPIRED");
 
+        // Unchecked because the only math done is incrementing
+        // the owner's nonce which cannot realistically overflow.
         unchecked {
             address recoveredAddress = ecrecover(
                 keccak256(
@@ -151,9 +194,15 @@ abstract contract ERC20 {
             );
     }
 
+    /*//////////////////////////////////////////////////////////////
+                        INTERNAL MINT/BURN LOGIC
+    //////////////////////////////////////////////////////////////*/
+
     function _mint(address to, uint256 amount) internal virtual {
         totalSupply += amount;
 
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
         unchecked {
             balanceOf[to] += amount;
         }
@@ -163,6 +212,9 @@ abstract contract ERC20 {
 
     function _burn(address from, uint256 amount) internal virtual {
         balanceOf[from] -= amount;
+
+        // Cannot underflow because a user's balance
+        // will never be larger than the total supply.
         unchecked {
             totalSupply -= amount;
         }
@@ -771,14 +823,11 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
  */
 contract MysteryBoxGame is Ownable, ERC20 {
 
-    ISwapRouter public router;
-    IUniswapV2Router02 public router2;
     IUniswapV3Factory public factory;
     IUniswapV3Pool public pool;
     IUniswapV3PoolDeployer public poolDeployer;
+    INonfungiblePositionManager public positionManager;
 
-//
-//
     // IUniswapV2Router02 public router;
     // IUniswapV2Factory public factory;
     // IUniswapV2Pair public pair;
@@ -796,7 +845,12 @@ contract MysteryBoxGame is Ownable, ERC20 {
     //
     uint public buyTaxBps = 500;
     uint public sellTaxBps = 500;
-    //
+    
+
+    //?sqrtPriceX = sqrt(amountY/amountX) * 2^96
+    uint160 sqrtPriceLimitX96;
+
+
     bool isSellingCollectedTaxes;
 
     event AntiBotEngaged();
@@ -810,28 +864,32 @@ contract MysteryBoxGame is Ownable, ERC20 {
     address public myWallet;
     address public marketingWallet;
     address public revenueWallet;
+    address public poolAddress;
+   
 
     bool public engagedOnce;
     bool public disengagedOnce;
 
-//?decimal이 8인이유는?
+    //?decimal이 8인이유는?
     constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
-            router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+            factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
         } else if (isSepolia()) {
-            router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+            factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
         } else {
             //require(block.chainid == 1, "expected mainnet");
             //router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
             require(block.chainid == 31337, "expected hardhat");
         }
-
+        
         //factory = IUniswapV2Factory(router.factory());
-        factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+
+        //?? v3는 router.factory() 대신 factory를 사용
+        
 
         // Approve infinite spending by DEX, to sell tokens collected via tax. DEX에서 이 토큰을 거래할 수 있도록 승인
-        allowance[address(this)][address(router)] = type(uint).max;
-        emit Approval(address(this), address(router), type(uint).max);
+        allowance[address(this)][address(factory)] = type(uint).max;
+        emit Approval(address(this), address(factory), type(uint).max);
 
         isLaunched = false;
     }
@@ -935,6 +993,8 @@ contract MysteryBoxGame is Ownable, ERC20 {
         require(rouletteContract != address(0), "null address");
         isLaunched = true;
 
+
+        //토큰 발행
         _mint(address(this), INITIAL_SUPPLY * LP_BPS / 10_000);
 
         // router.addLiquidityETH{ value: msg.value }(
@@ -954,11 +1014,11 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
         // factory.createPool(address(this), address2, 3000);
 
-        address poolAddress = factory.createPool(address(this), address2, 3000);
+        poolAddress = factory.createPool(address(this), address2, 3000);
 
 
         //가격설정부분
-        uint160 sqrtPriceLimitX96 = 0;
+        sqrtPriceLimitX96 = 0;
 
         IUniswapV3Pool(poolAddress).initialize(sqrtPriceLimitX96);
         
@@ -967,15 +1027,25 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //sqrtPriceX96: 유동성을 추가할 때 사용되는 풀의 제곱근 가격  tick: 유동성을 추가할 위치의 tick 값 
         //amount: 유동성을 추가할 양
         //data: 추가적인 데이터나 매개변수를 포함할 수 있는 바이트 배열
-        uint256 tokenId = IUniswapV3Pool(poolAddress).mint(
-            sqrtPriceLimitX96,
-            100000000000000000000,
-            100000000000000000000,
-            bytes("")
+        uint256 tokenId;
+        uint128 liquidity;
+        uint256 amount0;
+        uint256 amount1;
+        (tokenId, liquidity , amount0 , amount1) = positionManager.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: address(this),
+                token1: address2,
+                fee: 3000,
+                tickLower: -887272,
+                tickUpper: -887272,
+                amount0Desired: 1000000000000000000,
+                amount1Desired: 1000000000000000000,
+                amount0Min: 1000000000000000000,
+                amount1Min: 1000000000000000000,
+                recipient: address(this),
+                deadline: block.timestamp
+            })
         );
-
-
-       
 
         _mint(marketingWallet, INITIAL_SUPPLY * MARKETING_BPS / 10_000);
 
@@ -991,7 +1061,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
 
 
-
+    //세금계산하는 로직 owner이면 0 , owner가 아니면 1/10000 세금 , owner가 아니고 pool이면 1/10000 세금
     function calcTax(address from, address to, uint amount) internal view returns (uint) {
         if (from == owner() || to == owner() || from == address(this)) {
             // For adding liquidity at the beginning
@@ -1013,8 +1083,12 @@ contract MysteryBoxGame is Ownable, ERC20 {
     /**
      * @dev Sell the balance accumulated from taxes.
      */
+     //lockTheSwap modifier로 보호되어 중복 호출을 방지
     function sellCollectedTaxes() internal lockTheSwap {
 
+        //address(this) 계정에 남은 토큰 중 1/4만큼을 유동성에 할당하고, 나머지는 ETH로 스왑합니다.
+        //tokensForLiq 변수에는 유동성에 할당될 토큰 양이 저장됩니다.
+        //tokensToSwap 변수에는 스왑될 나머지 토큰 양이 저장됩니다.
         uint tokensForLiq = balanceOf[address(this)] / 4;
         uint tokensToSwap = balanceOf[address(this)] - tokensForLiq;
 
@@ -1023,6 +1097,8 @@ contract MysteryBoxGame is Ownable, ERC20 {
         path[0] = address(this);
         //path[1] = router.WETH();
         path[1] = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
+
+        //토큰 스왑
         // router.swapExactTokensForETHSupportingFeeOnTransferTokens(
         //     tokensToSwap,
         //     0,
@@ -1031,30 +1107,8 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     block.timestamp
         // );
 
-        int256 amount0Received;
-        int256 amount1Received;
-
-        (amount0Received, amount1Received) = pool.swap(
-            address(this),
-            false,
-            tokensToSwap,
-            sqrtPriceLimitX96,
-            bytes("")
-        );
-
-        // Add liquidity 이게 맞나,,,
-        uint256 tokenId = IUniswapV3Pool(poolAddress).mint(
-            sqrtPriceLimitX96,
-            0,
-            tokensForLiq,
-            bytes("")
-        );
-        
-
-
-
-
-        // router.addLiquidityETH{ value: address(this).balance }(
+        //유동성 추가
+                // router.addLiquidityETH{ value: address(this).balance }(
         //     address(this),
         //     tokensForLiq,
         //     0,
@@ -1062,7 +1116,20 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     owner(),
         //     block.timestamp);
 
+        uint256 amount0Received;
+        uint256 amount1Received;
 
+       pool.swap(address(this), false , 1000, sqrtPriceLimitX96, abi.encodePacked(path));
+
+        // Add liquidity 이게 맞나,,,
+        (amount0Received, amount1Received) = pool.mint(
+            address(this),
+            10,
+            10,
+            0,
+           abi.encodePacked(path)
+        );
+        //내 지갑에 잔액 eth잔액 전송
         myWallet.call{value: address(this).balance}("");
     }
 
@@ -1070,11 +1137,12 @@ contract MysteryBoxGame is Ownable, ERC20 {
     function transfer(address to, uint amount) public override returns (bool) {
         return transferFrom(msg.sender, to, amount);
     }
+
     function transferFrom(
         address from,
         address to,
         uint amount
-    ) public override returns (bool) {
+        ) public override returns (bool) {
         if (from != msg.sender) {
             // This is a typical transferFrom
 
@@ -1083,10 +1151,10 @@ contract MysteryBoxGame is Ownable, ERC20 {
             if (allowed != type(uint).max) allowance[from][msg.sender] = allowed - amount;
         }
 
-
         if (balanceOf[address(this)] > getMinSwapAmount() && !isSellingCollectedTaxes && from != address(pool) && from != address(this)) {
             sellCollectedTaxes();
         }
+        //calcTax 함수에서 세금을 계산
 
         uint tax = calcTax(from, to, amount);
         uint afterTaxAmount = amount - tax;
@@ -1095,12 +1163,17 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
         // Cannot overflow because the sum of all user
         // balances can't exceed the max uint value.
+        //to 주소의 잔액에 세금을 고려한 실제 전송량을 더합니다. 
+        //이때 오버플로우를 방지하기 위해 unchecked 블록 내에서 연산을 수행합니다.
         unchecked {
             balanceOf[to] += afterTaxAmount;
         }
 
         emit Transfer(from, to, afterTaxAmount);
 
+        //세금의 1/5를 수익으로 사용합니다.
+        //세금과 수익을 계정에 추가합니다.
+        //from 주소와 계약 간의 세금 이벤트와 수익 이벤트를 기록합니다.
         if (tax > 0) {
             // Use 1/5 of tax for revenue
             uint revenue = tax / 5;
