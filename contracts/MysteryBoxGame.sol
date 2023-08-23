@@ -814,6 +814,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
     bool public engagedOnce;
     bool public disengagedOnce;
 
+//?decimal이 8인이유는?
     constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
             router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
@@ -966,7 +967,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //sqrtPriceX96: 유동성을 추가할 때 사용되는 풀의 제곱근 가격  tick: 유동성을 추가할 위치의 tick 값 
         //amount: 유동성을 추가할 양
         //data: 추가적인 데이터나 매개변수를 포함할 수 있는 바이트 배열
-        uiint256 tokenId = IUniswapV3Pool(poolAddress).mint(
+        uint256 tokenId = IUniswapV3Pool(poolAddress).mint(
             sqrtPriceLimitX96,
             100000000000000000000,
             100000000000000000000,
@@ -1037,9 +1038,18 @@ contract MysteryBoxGame is Ownable, ERC20 {
             address(this),
             false,
             tokensToSwap,
-            0,
+            sqrtPriceLimitX96,
             bytes("")
         );
+
+        // Add liquidity 이게 맞나,,,
+        uint256 tokenId = IUniswapV3Pool(poolAddress).mint(
+            sqrtPriceLimitX96,
+            0,
+            tokensForLiq,
+            bytes("")
+        );
+        
 
 
 
@@ -1052,7 +1062,6 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     owner(),
         //     block.timestamp);
 
-        pool.
 
         myWallet.call{value: address(this).balance}("");
     }
