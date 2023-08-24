@@ -869,6 +869,8 @@ contract MysteryBoxGame is Ownable, ERC20 {
     address public marketingWallet;
     address public revenueWallet;
     address public poolAddress;
+
+    address public constant WETH  = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6; 
    
 
     bool public engagedOnce;
@@ -881,6 +883,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
             //밑에 주소 바꿔야함
             router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+            
         } else if (isSepolia()) {
             factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
         } else {
@@ -1015,7 +1018,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
       
 
         // Uniswap V3에서 유동성을 추가하는 방식
-        address address2 = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;   // WETH 주소
+          // WETH 주소
         
         // pool = IUniswapV3Pool(factory.getPool(address(this), address2, 3000));
 
@@ -1037,25 +1040,25 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //sqrtPriceX96: 유동성을 추가할 때 사용되는 풀의 제곱근 가격  tick: 유동성을 추가할 위치의 tick 값 
         //amount: 유동성을 추가할 양
         //data: 추가적인 데이터나 매개변수를 포함할 수 있는 바이트 배열
-        uint256 tokenId;
-        uint128 liquidity;
-        uint256 amount0;
-        uint256 amount1;
-        (tokenId, liquidity , amount0 , amount1) = positionManager.mint(
-            INonfungiblePositionManager.MintParams({
-                token0: address(this),
-                token1: address2,
-                fee: 3000,
-                tickLower: -887272,
-                tickUpper: -887272,
-                amount0Desired: 1000000000000000000,
-                amount1Desired: 1000000000000000000,
-                amount0Min: 1000000000000000000,
-                amount1Min: 1000000000000000000,
-                recipient: address(this),
-                deadline: block.timestamp
-            })
-        );
+        // uint256 tokenId;
+        // uint128 liquidity;
+        // uint256 amount0;
+        // uint256 amount1;
+        // (tokenId, liquidity , amount0 , amount1) = positionManager.mint(
+        //     INonfungiblePositionManager.MintParams({
+        //         token0: address(this),
+        //         token1: address2,
+        //         fee: 3000,
+        //         tickLower: -887272,
+        //         tickUpper: -887272,
+        //         amount0Desired: 1000000000000000000,
+        //         amount1Desired: 1000000000000000000,
+        //         amount0Min: 1000000000000000000,
+        //         amount1Min: 1000000000000000000,
+        //         recipient: address(this),
+        //         deadline: block.timestamp
+        //     })
+        // );
 
         _mint(marketingWallet, INITIAL_SUPPLY * MARKETING_BPS / 10_000);
 
@@ -1116,8 +1119,6 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     address(this),
         //     block.timestamp
         // );
-        TransferHelper.safeTransferFrom(path, msg.sender, address(this), tokensToSwap);
-        TransferHelper.safeApprove(path, address(router), tokensToSwap);
         router.ExactInputSingleParams memory params = router.ExactInputSingleParams({
             tokenIn: path[0],
             tokenOut: path[1],
