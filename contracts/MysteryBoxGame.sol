@@ -19,6 +19,9 @@ import '@uniswap/v3-periphery/contracts/interfaces/IPoolInitializer.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/IERC721Permit.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/IPeripheryPayments.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol';
+
+import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
+import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
 //import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
 
 
@@ -827,6 +830,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
     IUniswapV3Pool public pool;
     IUniswapV3PoolDeployer public poolDeployer;
     INonfungiblePositionManager public positionManager;
+    ISwapRouter public router;
 
     // IUniswapV2Router02 public router;
     // IUniswapV2Factory public factory;
@@ -874,6 +878,9 @@ contract MysteryBoxGame is Ownable, ERC20 {
     constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
             factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+
+            //밑에 주소 바꿔야함
+            router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
         } else if (isSepolia()) {
             factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
         } else {
@@ -1014,6 +1021,9 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
         // factory.createPool(address(this), address2, 3000);
 
+        // For this example, we will set the pool fee to 0.3%.
+
+
         poolAddress = factory.createPool(address(this), address2, 3000);
 
 
@@ -1106,6 +1116,18 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     address(this),
         //     block.timestamp
         // );
+        TransferHelper.safeTransferFrom(path, msg.sender, address(this), tokensToSwap);
+        TransferHelper.safeApprove(path, address(router), tokensToSwap);
+        router.ExactInputSingleParams memory params = router.ExactInputSingleParams({
+            tokenIn: path[0],
+            tokenOut: path[1],
+            fee: 3000,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: tokensToSwap,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
 
         //유동성 추가
                 // router.addLiquidityETH{ value: address(this).balance }(
@@ -1119,7 +1141,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
         uint256 amount0Received;
         uint256 amount1Received;
 
-       pool.swap(address(this), false , 1000, sqrtPriceLimitX96, abi.encodePacked(path));
+       
 
         // Add liquidity 이게 맞나,,,
         (amount0Received, amount1Received) = pool.mint(
