@@ -12,7 +12,7 @@ if (!privateKey) {
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.19", // 0.7.0 이상의 버전만 컴파일됩니다
+    version: "0.8.19",
   },
   defaultNetwork: "hardhat",
   etherscan: {

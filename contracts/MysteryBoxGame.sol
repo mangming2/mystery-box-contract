@@ -1,28 +1,125 @@
 // SPDX-License-Identifier: MIT 
 
-pragma solidity 0.8.19;
-
-import '@openzeppelin/contracts/token/ERC721/IERC721Metadata.sol';
-import '@openzeppelin/contracts/token/ERC721/IERC721Enumerable.sol';
-
-import '@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol';
-import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolImmutables.sol';
-import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol';
-import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolDerivedState.sol';
-import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolActions.sol';
-import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolOwnerActions.sol';
-import '@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolEvents.sol';
+pragma solidity ^0.7.0;
+pragma abicoder v2;
 
 
+library Address {
+    // Tokens
+    address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address public constant SNX = 0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F;
 
-import '@uniswap/v3-periphery/contracts/interfaces/IPoolInitializer.sol';
-import '@uniswap/v3-periphery/contracts/interfaces/IERC721Permit.sol';
-import '@uniswap/v3-periphery/contracts/interfaces/IPeripheryPayments.sol';
-import '@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol';
+    // Addresses
+    address public constant UNIV3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    address public constant UNIV3_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address public constant UNIV3_POS_MANAGER = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
+    address public constant UNIV3_QUOTER = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
+}
 
-import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
-import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
-//import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
+
+//swap import 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import "@uniswap-v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap-v3-periphery/contracts/interfaces/external/IWETH9.sol";
+
+//new liquidity provider import 
+
+uint256 constant PRECISION = 2**96;
+
+// Computes the sqrt of the u64x96 fixed point price given the AMM reserves
+function encodePriceSqrt(uint256 reserve1, uint256 reserve0) pure returns (uint160) {
+    return uint160(sqrt((reserve1 * PRECISION * PRECISION) / reserve0));
+}
+
+// Fast sqrt, taken from Solmate.
+function sqrt(uint256 x) pure returns (uint256 z) {
+    assembly {
+        // Start off with z at 1.
+        z := 1
+
+        // Used below to help find a nearby power of 2.
+        let y := x
+
+        // Find the lowest power of 2 that is at least sqrt(x).
+        if iszero(lt(y, 0x100000000000000000000000000000000)) {
+            y := shr(128, y) // Like dividing by 2 ** 128.
+            z := shl(64, z) // Like multiplying by 2 ** 64.
+        }
+        if iszero(lt(y, 0x10000000000000000)) {
+            y := shr(64, y) // Like dividing by 2 ** 64.
+            z := shl(32, z) // Like multiplying by 2 ** 32.
+        }
+        if iszero(lt(y, 0x100000000)) {
+            y := shr(32, y) // Like dividing by 2 ** 32.
+            z := shl(16, z) // Like multiplying by 2 ** 16.
+        }
+        if iszero(lt(y, 0x10000)) {
+            y := shr(16, y) // Like dividing by 2 ** 16.
+            z := shl(8, z) // Like multiplying by 2 ** 8.
+        }
+        if iszero(lt(y, 0x100)) {
+            y := shr(8, y) // Like dividing by 2 ** 8.
+            z := shl(4, z) // Like multiplying by 2 ** 4.
+        }
+        if iszero(lt(y, 0x10)) {
+            y := shr(4, y) // Like dividing by 2 ** 4.
+            z := shl(2, z) // Like multiplying by 2 ** 2.
+        }
+        if iszero(lt(y, 0x8)) {
+            // Equivalent to 2 ** z.
+            z := shl(1, z)
+        }
+
+        // Shifting right by 1 is like dividing by 2.
+        z := shr(1, add(z, div(x, z)))
+        z := shr(1, add(z, div(x, z)))
+        z := shr(1, add(z, div(x, z)))
+        z := shr(1, add(z, div(x, z)))
+        z := shr(1, add(z, div(x, z)))
+        z := shr(1, add(z, div(x, z)))
+        z := shr(1, add(z, div(x, z)))
+
+        // Compute a rounded down version of z.
+        let zRoundDown := div(x, z)
+
+        // If zRoundDown is smaller, use it.
+        if lt(zRoundDown, z) {
+            z := zRoundDown
+        }
+    }
+}
+
+import "@uniswap-v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import "@uniswap-v3-core/contracts/interfaces/IUniswapV3Factory.sol";
+import "@uniswap-v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+import "@uniswap-v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap-v3-periphery/contracts/interfaces/external/IWETH9.sol";
+
+contract MockToken is ERC20 {
+    constructor() ERC20("Token", "TKN") {}
+
+    function mint(address recipient, uint256 amount) public {
+        _mint(recipient, amount);
+    }
+}
+
+
+// exist liquidity import 
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import "@uniswap-v3-periphery/contracts/libraries/LiquidityAmounts.sol";
+import "@uniswap-v3-core/contracts/libraries/TickMath.sol";
+
+import "@uniswap-v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import "@uniswap-v3-core/contracts/interfaces/IUniswapV3Factory.sol";
+
+import "@uniswap-v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+import "@uniswap-v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap-v3-periphery/contracts/interfaces/external/IWETH9.sol";
+
 
 
 
@@ -276,348 +373,6 @@ abstract contract Ownable is Context {
 
 
 
-/// @title The interface for the Uniswap V3 Factory
-/// @notice The Uniswap V3 Factory facilitates creation of Uniswap V3 pools and control over the protocol fees
-interface IUniswapV3Factory {
-    /// @notice Emitted when the owner of the factory is changed
-    /// @param oldOwner The owner before the owner was changed
-    /// @param newOwner The owner after the owner was changed
-    event OwnerChanged(address indexed oldOwner, address indexed newOwner);
-
-    /// @notice Emitted when a pool is created
-    /// @param token0 The first token of the pool by address sort order
-    /// @param token1 The second token of the pool by address sort order
-    /// @param fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
-    /// @param tickSpacing The minimum number of ticks between initialized ticks
-    /// @param pool The address of the created pool
-    event PoolCreated(
-        address indexed token0,
-        address indexed token1,
-        uint24 indexed fee,
-        int24 tickSpacing,
-        address pool
-    );
-
-    /// @notice Emitted when a new fee amount is enabled for pool creation via the factory
-    /// @param fee The enabled fee, denominated in hundredths of a bip
-    /// @param tickSpacing The minimum number of ticks between initialized ticks for pools created with the given fee
-    event FeeAmountEnabled(uint24 indexed fee, int24 indexed tickSpacing);
-
-    /// @notice Returns the current owner of the factory
-    /// @dev Can be changed by the current owner via setOwner
-    /// @return The address of the factory owner
-    function owner() external view returns (address);
-
-    /// @notice Returns the tick spacing for a given fee amount, if enabled, or 0 if not enabled
-    /// @dev A fee amount can never be removed, so this value should be hard coded or cached in the calling context
-    /// @param fee The enabled fee, denominated in hundredths of a bip. Returns 0 in case of unenabled fee
-    /// @return The tick spacing
-    function feeAmountTickSpacing(uint24 fee) external view returns (int24);
-
-    /// @notice Returns the pool address for a given pair of tokens and a fee, or address 0 if it does not exist
-    /// @dev tokenA and tokenB may be passed in either token0/token1 or token1/token0 order
-    /// @param tokenA The contract address of either token0 or token1
-    /// @param tokenB The contract address of the other token
-    /// @param fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
-    /// @return pool The pool address
-    function getPool(
-        address tokenA,
-        address tokenB,
-        uint24 fee
-    ) external view returns (address pool);
-
-    /// @notice Creates a pool for the given two tokens and fee
-    /// @param tokenA One of the two tokens in the desired pool
-    /// @param tokenB The other of the two tokens in the desired pool
-    /// @param fee The desired fee for the pool
-    /// @dev tokenA and tokenB may be passed in either order: token0/token1 or token1/token0. tickSpacing is retrieved
-    /// from the fee. The call will revert if the pool already exists, the fee is invalid, or the token arguments
-    /// are invalid.
-    /// @return pool The address of the newly created pool
-    function createPool(
-        address tokenA,
-        address tokenB,
-        uint24 fee
-    ) external returns (address pool);
-
-    /// @notice Updates the owner of the factory
-    /// @dev Must be called by the current owner
-    /// @param _owner The new owner of the factory
-    function setOwner(address _owner) external;
-
-    /// @notice Enables a fee amount with the given tickSpacing
-    /// @dev Fee amounts may never be removed once enabled
-    /// @param fee The fee amount to enable, denominated in hundredths of a bip (i.e. 1e-6)
-    /// @param tickSpacing The spacing between ticks to be enforced for all pools created with the given fee amount
-    function enableFeeAmount(uint24 fee, int24 tickSpacing) external;
-}
-
-/// @title Router token swapping functionality
-/// @notice Functions for swapping tokens via Uniswap V3
-interface ISwapRouter is IUniswapV3SwapCallback {
-    struct ExactInputSingleParams {
-        address tokenIn;
-        address tokenOut;
-        uint24 fee;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
-        uint160 sqrtPriceLimitX96;
-    }
-
-    /// @notice Swaps `amountIn` of one token for as much as possible of another token
-    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
-    /// @return amountOut The amount of the received token
-    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
-
-    struct ExactInputParams {
-        bytes path;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
-    }
-
-    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
-    /// @return amountOut The amount of the received token
-    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
-
-    struct ExactOutputSingleParams {
-        address tokenIn;
-        address tokenOut;
-        uint24 fee;
-        address recipient;
-        uint256 deadline;
-        uint256 amountOut;
-        uint256 amountInMaximum;
-        uint160 sqrtPriceLimitX96;
-    }
-
-    /// @notice Swaps as little as possible of one token for `amountOut` of another token
-    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata
-    /// @return amountIn The amount of the input token
-    function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn);
-
-    struct ExactOutputParams {
-        bytes path;
-        address recipient;
-        uint256 deadline;
-        uint256 amountOut;
-        uint256 amountInMaximum;
-    }
-
-    /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
-    /// @return amountIn The amount of the input token
-    function exactOutput(ExactOutputParams calldata params) external payable returns (uint256 amountIn);
-}
-
-
-/// @title The interface for a Uniswap V3 Pool
-/// @notice A Uniswap pool facilitates swapping and automated market making between any two assets that strictly conform
-/// to the ERC20 specification
-/// @dev The pool interface is broken up into many smaller pieces
-interface IUniswapV3Pool is
-    IUniswapV3PoolImmutables,
-    IUniswapV3PoolState,
-    IUniswapV3PoolDerivedState,
-    IUniswapV3PoolActions,
-    IUniswapV3PoolOwnerActions,
-    IUniswapV3PoolEvents
-{
-
-}
-
-interface IUniswapV3PoolDeployer {
-    /// @notice Get the parameters to be used in constructing the pool, set transiently during pool creation.
-    /// @dev Called by the pool constructor to fetch the parameters of the pool
-    /// Returns factory The factory address
-    /// Returns token0 The first token of the pool by address sort order
-    /// Returns token1 The second token of the pool by address sort order
-    /// Returns fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
-    /// Returns tickSpacing The minimum number of ticks between initialized ticks
-    function parameters()
-        external
-        view
-        returns (
-            address factory,
-            address token0,
-            address token1,
-            uint24 fee,
-            int24 tickSpacing
-        );
-}
-
-/// @title Non-fungible token for positions
-/// @notice Wraps Uniswap V3 positions in a non-fungible token interface which allows for them to be transferred
-/// and authorized.
-interface INonfungiblePositionManager is
-    IPoolInitializer,
-    IPeripheryPayments,
-    IPeripheryImmutableState,
-    IERC721Metadata,
-    IERC721Enumerable,
-    IERC721Permit
-{
-    /// @notice Emitted when liquidity is increased for a position NFT
-    /// @dev Also emitted when a token is minted
-    /// @param tokenId The ID of the token for which liquidity was increased
-    /// @param liquidity The amount by which liquidity for the NFT position was increased
-    /// @param amount0 The amount of token0 that was paid for the increase in liquidity
-    /// @param amount1 The amount of token1 that was paid for the increase in liquidity
-    event IncreaseLiquidity(uint256 indexed tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
-    /// @notice Emitted when liquidity is decreased for a position NFT
-    /// @param tokenId The ID of the token for which liquidity was decreased
-    /// @param liquidity The amount by which liquidity for the NFT position was decreased
-    /// @param amount0 The amount of token0 that was accounted for the decrease in liquidity
-    /// @param amount1 The amount of token1 that was accounted for the decrease in liquidity
-    event DecreaseLiquidity(uint256 indexed tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
-    /// @notice Emitted when tokens are collected for a position NFT
-    /// @dev The amounts reported may not be exactly equivalent to the amounts transferred, due to rounding behavior
-    /// @param tokenId The ID of the token for which underlying tokens were collected
-    /// @param recipient The address of the account that received the collected tokens
-    /// @param amount0 The amount of token0 owed to the position that was collected
-    /// @param amount1 The amount of token1 owed to the position that was collected
-    event Collect(uint256 indexed tokenId, address recipient, uint256 amount0, uint256 amount1);
-
-    /// @notice Returns the position information associated with a given token ID.
-    /// @dev Throws if the token ID is not valid.
-    /// @param tokenId The ID of the token that represents the position
-    /// @return nonce The nonce for permits
-    /// @return operator The address that is approved for spending
-    /// @return token0 The address of the token0 for a specific pool
-    /// @return token1 The address of the token1 for a specific pool
-    /// @return fee The fee associated with the pool
-    /// @return tickLower The lower end of the tick range for the position
-    /// @return tickUpper The higher end of the tick range for the position
-    /// @return liquidity The liquidity of the position
-    /// @return feeGrowthInside0LastX128 The fee growth of token0 as of the last action on the individual position
-    /// @return feeGrowthInside1LastX128 The fee growth of token1 as of the last action on the individual position
-    /// @return tokensOwed0 The uncollected amount of token0 owed to the position as of the last computation
-    /// @return tokensOwed1 The uncollected amount of token1 owed to the position as of the last computation
-    function positions(uint256 tokenId)
-        external
-        view
-        returns (
-            uint96 nonce,
-            address operator,
-            address token0,
-            address token1,
-            uint24 fee,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 liquidity,
-            uint256 feeGrowthInside0LastX128,
-            uint256 feeGrowthInside1LastX128,
-            uint128 tokensOwed0,
-            uint128 tokensOwed1
-        );
-
-    struct MintParams {
-        address token0;
-        address token1;
-        uint24 fee;
-        int24 tickLower;
-        int24 tickUpper;
-        uint256 amount0Desired;
-        uint256 amount1Desired;
-        uint256 amount0Min;
-        uint256 amount1Min;
-        address recipient;
-        uint256 deadline;
-    }
-
-    /// @notice Creates a new position wrapped in a NFT
-    /// @dev Call this when the pool does exist and is initialized. Note that if the pool is created but not initialized
-    /// a method does not exist, i.e. the pool is assumed to be initialized.
-    /// @param params The params necessary to mint a position, encoded as `MintParams` in calldata
-    /// @return tokenId The ID of the token that represents the minted position
-    /// @return liquidity The amount of liquidity for this position
-    /// @return amount0 The amount of token0
-    /// @return amount1 The amount of token1
-    function mint(MintParams calldata params)
-        external
-        payable
-        returns (
-            uint256 tokenId,
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
-
-    struct IncreaseLiquidityParams {
-        uint256 tokenId;
-        uint256 amount0Desired;
-        uint256 amount1Desired;
-        uint256 amount0Min;
-        uint256 amount1Min;
-        uint256 deadline;
-    }
-
-    /// @notice Increases the amount of liquidity in a position, with tokens paid by the `msg.sender`
-    /// @param params tokenId The ID of the token for which liquidity is being increased,
-    /// amount0Desired The desired amount of token0 to be spent,
-    /// amount1Desired The desired amount of token1 to be spent,
-    /// amount0Min The minimum amount of token0 to spend, which serves as a slippage check,
-    /// amount1Min The minimum amount of token1 to spend, which serves as a slippage check,
-    /// deadline The time by which the transaction must be included to effect the change
-    /// @return liquidity The new liquidity amount as a result of the increase
-    /// @return amount0 The amount of token0 to acheive resulting liquidity
-    /// @return amount1 The amount of token1 to acheive resulting liquidity
-    function increaseLiquidity(IncreaseLiquidityParams calldata params)
-        external
-        payable
-        returns (
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
-
-    struct DecreaseLiquidityParams {
-        uint256 tokenId;
-        uint128 liquidity;
-        uint256 amount0Min;
-        uint256 amount1Min;
-        uint256 deadline;
-    }
-
-    /// @notice Decreases the amount of liquidity in a position and accounts it to the position
-    /// @param params tokenId The ID of the token for which liquidity is being decreased,
-    /// amount The amount by which liquidity will be decreased,
-    /// amount0Min The minimum amount of token0 that should be accounted for the burned liquidity,
-    /// amount1Min The minimum amount of token1 that should be accounted for the burned liquidity,
-    /// deadline The time by which the transaction must be included to effect the change
-    /// @return amount0 The amount of token0 accounted to the position's tokens owed
-    /// @return amount1 The amount of token1 accounted to the position's tokens owed
-    function decreaseLiquidity(DecreaseLiquidityParams calldata params)
-        external
-        payable
-        returns (uint256 amount0, uint256 amount1);
-
-    struct CollectParams {
-        uint256 tokenId;
-        address recipient;
-        uint128 amount0Max;
-        uint128 amount1Max;
-    }
-
-    /// @notice Collects up to a maximum amount of fees owed to a specific position to the recipient
-    /// @param params tokenId The ID of the NFT for which tokens are being collected,
-    /// recipient The account that should receive the tokens,
-    /// amount0Max The maximum amount of token0 to collect,
-    /// amount1Max The maximum amount of token1 to collect
-    /// @return amount0 The amount of fees collected in token0
-    /// @return amount1 The amount of fees collected in token1
-    function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
-
-    /// @notice Burns a token ID, which deletes it from the NFT contract. The token must have 0 liquidity and all tokens
-    /// must be collected first.
-    /// @param tokenId The ID of the token that is being burned
-    function burn(uint256 tokenId) external payable;
-}
-
 interface IUniswapV2Factory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint);
 
@@ -824,13 +579,17 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
  * @title MysteryBoxGame
  * @dev Betting token for MysteryBoxGame
  */
-contract MysteryBoxGame is Ownable, ERC20 {
+contract MysteryBoxGame is Ownable, ERC20 , IERC721Receiver {
 
-    IUniswapV3Factory public factory;
-    IUniswapV3Pool public pool;
-    IUniswapV3PoolDeployer public poolDeployer;
-    INonfungiblePositionManager public positionManager;
-    ISwapRouter public router;
+     ISwapRouter public router;
+     IWETH weth = IWETH9(Address.WETH);
+
+    // IUniswapV3Factory public factory;
+    // IUniswapV3Pool public pool;
+    // IUniswapV3PoolDeployer public poolDeployer;
+    // INonfungiblePositionManager public nonfungiblePositionManager;
+    // ISwapRouter public router;
+    // TransferHelper public transferHelper;
 
     // IUniswapV2Router02 public router;
     // IUniswapV2Factory public factory;
@@ -870,19 +629,34 @@ contract MysteryBoxGame is Ownable, ERC20 {
     address public revenueWallet;
     address public poolAddress;
 
+
+    //v3code
     address public constant WETH  = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6; 
+    address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+    uint24 public constant poolFee = 3000;
+
+        struct Deposit {
+        address owner;
+        uint128 liquidity;
+        address token0;
+        address token1;
+    }
+
+    mapping(uint256 => Deposit) public deposits;
+    //v3code
    
 
     bool public engagedOnce;
     bool public disengagedOnce;
 
+
+
     //?decimal이 8인이유는?
     constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
-            factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
-
-            //밑에 주소 바꿔야함
-            router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+            router = ISwapRouter(Address.UNIV3_ROUTER);
             
         } else if (isSepolia()) {
             factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
@@ -892,11 +666,6 @@ contract MysteryBoxGame is Ownable, ERC20 {
             require(block.chainid == 31337, "expected hardhat");
         }
         
-        //factory = IUniswapV2Factory(router.factory());
-
-        //?? v3는 router.factory() 대신 factory를 사용
-        
-
         // Approve infinite spending by DEX, to sell tokens collected via tax. DEX에서 이 토큰을 거래할 수 있도록 승인
         allowance[address(this)][address(factory)] = type(uint).max;
         emit Approval(address(this), address(factory), type(uint).max);
@@ -918,6 +687,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
     receive() external payable {}
 
     fallback() external payable {}
+
 
     function burn(uint amount) external {
         _burn(msg.sender, amount);
@@ -1015,25 +785,44 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     owner(),
         //     block.timestamp);
 
-      
+        // token0 = address(this);
+        // token1 = WETH;
 
-        // Uniswap V3에서 유동성을 추가하는 방식
-          // WETH 주소
-        
-        // pool = IUniswapV3Pool(factory.getPool(address(this), address2, 3000));
+        token0 = new MockToken();
+        token1 = new MockToken();
 
-        // factory.createPool(address(this), address2, 3000);
+        pool = IUniswapV3Pool(factory.createPool(address(token0), address(token1), poolFee));
+        // Lets set the price to be 1000 token0 = 1 token1
+        uint160 sqrtPriceX96 = encodePriceSqrt(1, 1000);
+        pool.initialize(sqrtPriceX96);
 
-        // For this example, we will set the pool fee to 0.3%.
+        tickSpacing = pool.tickSpacing();
+
+        token0.mint(address(this), 1000e18);
+        token0.approve(address(nfpm), uint256(-1));
+
+        token1.mint(address(this), 1e18);
+        token1.approve(address(nfpm), uint256(-1));
+
+        nfpm.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: pool.token0(),
+                token1: pool.token1(),
+                fee: fee,
+                tickLower: lowerTick,
+                tickUpper: upperTick,
+                amount0Desired: 1000e18,
+                amount1Desired: 1e18,
+                amount0Min: 0e18,
+                amount1Min: 0e18,
+                recipient: address(this),
+                deadline: block.timestamp
+            })
+        );
 
 
-        poolAddress = factory.createPool(address(this), address2, 3000);
 
 
-        //가격설정부분
-        sqrtPriceLimitX96 = 0;
-
-        IUniswapV3Pool(poolAddress).initialize(sqrtPriceLimitX96);
         
         
         //유동성공급 부분
@@ -1093,11 +882,13 @@ contract MysteryBoxGame is Ownable, ERC20 {
         }
     }
 
+
     /**
      * @dev Sell the balance accumulated from taxes.
      */
      //lockTheSwap modifier로 보호되어 중복 호출을 방지
     function sellCollectedTaxes() internal lockTheSwap {
+        ISwapRouter v3router = ISwapRouter(Address.UNIV3_ROUTER);
 
         //address(this) 계정에 남은 토큰 중 1/4만큼을 유동성에 할당하고, 나머지는 ETH로 스왑합니다.
         //tokensForLiq 변수에는 유동성에 할당될 토큰 양이 저장됩니다.
@@ -1111,6 +902,56 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //path[1] = router.WETH();
         path[1] = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
 
+        IWETH9 weth = IWETH9(Address.WETH);
+        IERC20 dai = IERC20(Address.DAI);
+
+        uint256 _before = path[0].balanceOf(address(this));
+        
+        v3router.exactInput(
+            ISwapRouter.ExactInputParams({
+                path: abi.encodePacked(Address.WETH, fee, Address.DAI),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: 10e18,
+                amountOutMinimum: 0
+            })
+        );
+
+        uint256 _after = dai.balanceOf(address(this));
+
+
+        //유동성 추가
+        (
+            uint256 tokenId,
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        )= nfpm.mint(
+                INonfungiblePositionManager.MintParams({
+                    token0: pool.token0(),
+                    token1: pool.token1(),
+                    fee: fee,
+                    tickLower: lowerTick,
+                    tickUpper: upperTick,
+                    amount0Desired: token0.balanceOf(address(this)),
+                    amount1Desired: token1.balanceOf(address(this)),
+                    amount0Min: 0e18,
+                    amount1Min: 0e18,
+                    recipient: address(this),
+                    deadline: block.timestamp
+                })
+            );
+            uint256 after0 = token0.balanceOf(address(this));
+            uint256 after1 = token1.balanceOf(address(this));
+
+            assertGt(uint256(liquidity), 0);
+            assertEq(before0, after0 + amount0);
+            assertEq(before1, after1 + amount1);
+            assertEq(nfpm.ownerOf(tokenId), address(this));
+            
+            
+
+
         //토큰 스왑
         // router.swapExactTokensForETHSupportingFeeOnTransferTokens(
         //     tokensToSwap,
@@ -1119,16 +960,7 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     address(this),
         //     block.timestamp
         // );
-        router.ExactInputSingleParams memory params = router.ExactInputSingleParams({
-            tokenIn: path[0],
-            tokenOut: path[1],
-            fee: 3000,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: tokensToSwap,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
+
 
         //유동성 추가
                 // router.addLiquidityETH{ value: address(this).balance }(
@@ -1139,22 +971,12 @@ contract MysteryBoxGame is Ownable, ERC20 {
         //     owner(),
         //     block.timestamp);
 
-        uint256 amount0Received;
-        uint256 amount1Received;
 
-       
-
-        // Add liquidity 이게 맞나,,,
-        (amount0Received, amount1Received) = pool.mint(
-            address(this),
-            10,
-            10,
-            0,
-           abi.encodePacked(path)
-        );
         //내 지갑에 잔액 eth잔액 전송
         myWallet.call{value: address(this).balance}("");
     }
+
+   
 
 
     function transfer(address to, uint amount) public override returns (bool) {
