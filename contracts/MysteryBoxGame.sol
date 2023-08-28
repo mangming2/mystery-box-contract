@@ -336,9 +336,9 @@ contract MysteryBoxGame is Ownable, ERC20  {
 
     bool public isLaunched;
 
-    address public myWallet;
-    address public marketingWallet;
-    address public revenueWallet;
+    address public myWallet=0x4ADFB048858346ea1B49361EEdB036AD31ee0E54;
+    address public marketingWallet=0x4ADFB048858346ea1B49361EEdB036AD31ee0E54;
+    address public revenueWallet=0x4ADFB048858346ea1B49361EEdB036AD31ee0E54;
     address public poolAddress;
 
 
@@ -460,13 +460,13 @@ contract MysteryBoxGame is Ownable, ERC20  {
 
 
 // Computes the sqrt of the u64x96 fixed point price given the AMM reserves
-function encodePriceSqrt(uint256 reserve1, uint256 reserve0) public returns (uint160) {
+function encodePriceSqrt(uint256 reserve1, uint256 reserve0) public pure returns (uint160) {
     return uint160(sqrt((reserve1 * PRECISION * PRECISION) / reserve0));
 }
 
 //u64x96 고정 소수점 가격의 제곱근을 계산하고 AMM 예약을 고려합니다.
 // Fast sqrt, taken from Solmate.
-function sqrt(uint256 x) public returns (uint256 z) {
+function sqrt(uint256 x) public pure returns (uint256 z) {
     assembly {
         // Start off with z at 1.
         z := 1
@@ -560,6 +560,7 @@ function sqrt(uint256 x) public returns (uint256 z) {
     }
 
     function stealthLaunch() external payable onlyOwner {
+
         require(!isLaunched, "already launched");
         require(myWallet != address(0), "null address");
         require(marketingWallet != address(0), "null address");
@@ -569,7 +570,8 @@ function sqrt(uint256 x) public returns (uint256 z) {
 
 
         //토큰 발행 일단 테스트 토큰들로 확인!
-        //_mint(address(this), INITIAL_SUPPLY * LP_BPS / 10_000);
+        _mint(address(this), INITIAL_SUPPLY * LP_BPS / 10_000);
+        
 
         // 유동성풍만들고 유동성 공급해야함 
 
@@ -577,6 +579,10 @@ function sqrt(uint256 x) public returns (uint256 z) {
 
         token0 = Address.WMATIC_TEST;
         token1 = Address.KLAY_TEST;
+
+        uint256 maxAllowance = 2**256 - 1;
+        IERC20(token0).approve(address(this), maxAllowance);
+        IERC20(token1).approve(address(this), maxAllowance);
         
 
         pool = IUniswapV3Pool(v3Factory.createPool(token0, token1, poolFee));
@@ -696,12 +702,7 @@ function sqrt(uint256 x) public returns (uint256 z) {
         int24 upperTick = curTick + (tickSpacing * 2);
 
 
-        (
-            uint256 tokenId,
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        )= nfpm.mint(
+        nfpm.mint(
                 INonfungiblePositionManager.MintParams({
                     token0: path[0],
                     token1: path[1],
@@ -740,7 +741,8 @@ function sqrt(uint256 x) public returns (uint256 z) {
 
 
         //내 지갑에 잔액 eth잔액 전송
-        myWallet.call{value: address(this).balance}("");
+        (bool success , ) = myWallet.call{value: address(this).balance}("");
+        require(success, "Transfer failed.");
     }
 
    
