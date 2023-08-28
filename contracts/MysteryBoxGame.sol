@@ -14,13 +14,6 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 
-
-
-
-
-
-
-
 abstract contract ERC20 {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
