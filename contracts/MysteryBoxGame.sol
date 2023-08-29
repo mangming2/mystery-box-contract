@@ -6,13 +6,14 @@ pragma abicoder v2;
 //swap import 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap/swap-router-contracts/contracts/interfaces/ISwapRouter02.sol";
 
 
 //new liquidity provider import 
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 abstract contract ERC20 {
     /*//////////////////////////////////////////////////////////////
@@ -276,6 +277,7 @@ library Address {
     // Addresses
     address public constant UNIV3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     address public constant UNIV3_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+
     address public constant UNIV3_POS_MANAGER = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
     address public constant UNIV3_QUOTER = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
 
@@ -287,6 +289,7 @@ library Address {
     //Testnet Mumbai V3
     address public constant UNIV3_FACTORY_TEST = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     address public constant UNIV3_ROUTER_TEST = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address public constant UNIV3_ROUTER2_TEST = 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45;
     address public constant UNIV3_POS_MANAGER_TEST = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
     address public constant UNIV3_QUOTER_TEST = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
 }
@@ -297,7 +300,7 @@ library Address {
  */
 contract MysteryBoxGame is Ownable, ERC20  {
 
-     ISwapRouter public router;
+     ISwapRouter02 public router;
 
     // IUniswapV2Router02 public router;
     // IUniswapV2Factory public factory;
@@ -375,15 +378,15 @@ contract MysteryBoxGame is Ownable, ERC20  {
 
 
 
-    //?decimal이 8인이유는?
-    constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
+    
+    constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 18) {
         if (isGoerli()) {
-            router = ISwapRouter(Address.UNIV3_ROUTER);
+            router = ISwapRouter02(Address.UNIV3_ROUTER);
             
         } else if (isSepolia()) {
             
         } else if (isMumbai()){
-            router = ISwapRouter(Address.UNIV3_ROUTER_TEST);
+            router = ISwapRouter02(Address.UNIV3_ROUTER2_TEST);
             nfpm = INonfungiblePositionManager(Address.UNIV3_POS_MANAGER_TEST);
             v3Factory = IUniswapV3Factory(Address.UNIV3_FACTORY_TEST);
         } else {
@@ -439,7 +442,7 @@ contract MysteryBoxGame is Ownable, ERC20  {
     }
 
     function isTestnet() public view returns (bool) {
-        return isGoerli() || isSepolia();
+        return isGoerli() || isSepolia() || isMumbai();
     }
 
     function enableAntiBotMode() public onlyOwner {
@@ -559,33 +562,35 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
         revenueWallet = wallet;
     }
 
+    
+
     function stealthLaunch() external payable onlyOwner {
 
-        require(!isLaunched, "already launched");
-        require(myWallet != address(0), "null address");
-        require(marketingWallet != address(0), "null address");
-        require(revenueWallet != address(0), "null address");
-        require(mysteryGameContract != address(0), "null address");
-        isLaunched = true;
+        // require(!isLaunched, "already launched");
+        // require(myWallet != address(0), "null address");
+        // require(marketingWallet != address(0), "null address");
+        // require(revenueWallet != address(0), "null address");
+        // require(mysteryGameContract != address(0), "null address");
+        // isLaunched = true;
 
 
         //토큰 발행 일단 테스트 토큰들로 확인!
         _mint(address(this), INITIAL_SUPPLY * LP_BPS / 10_000);
+
+        token1 = Address.WMATIC_TEST;
+
+
+        // token1 = Address.KLAY_TEST;
+
+        // token0.approve(address(nfpm), uint256(-1));
+        // token1.approve(address(nfpm), uint256(-1));
+
+        IERC20 token = IERC20(token1);
         
+        token.approve(address(nfpm), msg.value);
 
-        // 유동성풍만들고 유동성 공급해야함 
-
-
-
-        token0 = Address.WMATIC_TEST;
-        token1 = Address.KLAY_TEST;
-
-        uint256 maxAllowance = 2**256 - 1;
-        IERC20(token0).approve(address(this), maxAllowance);
-        IERC20(token1).approve(address(this), maxAllowance);
         
-
-        pool = IUniswapV3Pool(v3Factory.createPool(token0, token1, poolFee));
+        pool = IUniswapV3Pool(v3Factory.createPool(address(this), token1 , poolFee));
         // Lets set the price to be 1000 token0 = 1 token1
         uint160 sqrtPriceX96 = encodePriceSqrt(1, 1000);
         pool.initialize(sqrtPriceX96);
@@ -609,7 +614,7 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
                 tickLower: lowerTick,
                 tickUpper: upperTick,
                 amount0Desired: 1000e18,
-                amount1Desired: 1e18,
+                amount1Desired: msg.value,
                 amount0Min: 0e18,
                 amount1Min: 0e18,
                 recipient: address(this),
@@ -658,7 +663,7 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
      */
      //lockTheSwap modifier로 보호되어 중복 호출을 방지
     function sellCollectedTaxes() internal lockTheSwap {
-        ISwapRouter v3router = ISwapRouter(Address.UNIV3_ROUTER_TEST);
+        ISwapRouter02 v3router = ISwapRouter02(Address.UNIV3_ROUTER2_TEST);
 
         //address(this) 계정에 남은 토큰 중 1/4만큼을 유동성에 할당하고, 나머지는 ETH로 스왑합니다.
         //tokensForLiq 변수에는 유동성에 할당될 토큰 양이 저장됩니다.
@@ -672,22 +677,25 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
         //path[0] = address(this);
         //path[1] = router.WETH();
 
-        path[0] = Address.WMATIC_TEST;
-        path[1] = Address.KLAY_TEST;
+        path[0] =address(this);
+        path[1] = Address.WMATIC_TEST;
 
-        
-        v3router.exactInput(
-            ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(path[0], fee, path[1]),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountIn: tokensToSwap,
-                amountOutMinimum: 0
-            })
-        );
+        address[] memory dynamicPath = new address[](2);
+        dynamicPath[0] = path[0];
+        dynamicPath[1] = path[1];
 
 
 
+        v3router.swapExactTokensForTokens(tokensToSwap, 0,dynamicPath, myWallet);
+        //    {
+        //         path: abi.encodePacked(path[0], fee, path[1]),
+        //         recipient: address(this),
+        //         amountIn : tokensToSwap,
+        //         amountOutMinimum: 0
+        //     }
+    
+
+    
         //유동성 추가
         pool = IUniswapV3Pool(
             v3Factory.getPool(Address.WMATIC_TEST, Address.KLAY_TEST, fee)

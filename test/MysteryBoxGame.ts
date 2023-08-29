@@ -14,7 +14,7 @@ describe("MysteryBoxGame Contract", function () {
       "MysteryBoxGame"
     );
     const mysteryBoxGame = await MysteryBoxGame.deploy();
-    await mysteryBoxGame.deployed();
+    await mysteryBoxGame.waitForDeployment();
   });
 
   // 다른 함수들에 대한 테스트 케이스를 필요에 따라 추가합니다.
