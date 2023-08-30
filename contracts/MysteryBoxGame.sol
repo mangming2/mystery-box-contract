@@ -15,6 +15,10 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
+import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
+
+
+
 abstract contract ERC20 {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -282,9 +286,8 @@ library Address {
     address public constant UNIV3_QUOTER = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
 
     // Tokens
-    address public constant WMATIC_TEST = 0x664088Ef1D8C5B156B8c8e1d25029c46D700E607;
-    address public constant KLAY_TEST = 0x088D03b0bd3F644C12Eb10528e829372C3eA0E6c;
-    address public constant USDT_TEST = 0x7f45Ad397595B71A89967a4971794ae4d0168F02;
+    address public constant WMATIC_TEST = 0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889;
+
 
     //Testnet Mumbai V3
     address public constant UNIV3_FACTORY_TEST = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
@@ -379,7 +382,7 @@ contract MysteryBoxGame is Ownable, ERC20  {
 
 
     
-    constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 18) {
+    constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
             router = ISwapRouter02(Address.UNIV3_ROUTER);
             
@@ -462,6 +465,7 @@ contract MysteryBoxGame is Ownable, ERC20  {
     }
 
 
+// COMM:reserve1 * PRECISION * PRECISION overflow 일어날 수도 있어서 Uniswap FullMath.mulDiv 사용하는 거 추천
 // Computes the sqrt of the u64x96 fixed point price given the AMM reserves
 function encodePriceSqrt(uint256 reserve1, uint256 reserve0) public pure returns (uint160) {
     return uint160(sqrt((reserve1 * PRECISION * PRECISION) / reserve0));
@@ -580,14 +584,10 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
         token1 = Address.WMATIC_TEST;
 
 
-        // token1 = Address.KLAY_TEST;
+        
 
         // token0.approve(address(nfpm), uint256(-1));
         // token1.approve(address(nfpm), uint256(-1));
-
-        IERC20 token = IERC20(token1);
-        
-        token.approve(address(nfpm), msg.value);
 
         
         pool = IUniswapV3Pool(v3Factory.createPool(address(this), token1 , poolFee));
@@ -604,23 +604,41 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
         int24 lowerTick = curTick - (tickSpacing * 2);
         int24 upperTick = curTick + (tickSpacing * 2);
 
-        
-
+        // COMM: amount0Desired는 토큰의 양을 말하는거지 이더의양을 말하는것이 아님! ETH -> WETH로 wrap을 해서 아래처럼 바꾸길 바람.
+        //weth: WETH 주소 전역변수로, 형은 MATIC_TEST로 설정
+        //IWETH9(weth).deposit({value: msg.value});
+        IWETH9(token1).deposit{value: msg.value}();
         nfpm.mint(
             INonfungiblePositionManager.MintParams({
                 token0: pool.token0(),
                 token1: pool.token1(),
-                fee: fee,  //위에서 선언한 3000
+                fee: poolFee, //위에서 선언한 3000, poolFee로 바꿔도 되지 않아?
                 tickLower: lowerTick,
                 tickUpper: upperTick,
-                amount0Desired: 1000e18,
-                amount1Desired: msg.value,
-                amount0Min: 0e18,
-                amount1Min: 0e18,
+                amount0Desired: 1000,
+                amount1Desired: IWETH9(token1).balanceOf(address(this)),
+                amount0Min: 0,
+                amount1Min: 0,
                 recipient: address(this),
                 deadline: block.timestamp
             })
         );
+
+        // nfpm.mint(
+        //     INonfungiblePositionManager.MintParams({
+        //         token0: pool.token0(),
+        //         token1: pool.token1(),
+        //         fee: fee,  //위에서 선언한 3000
+        //         tickLower: lowerTick,
+        //         tickUpper: upperTick,
+        //         amount0Desired: 1000e18,
+        //         amount1Desired: msg.value,
+        //         amount0Min: 0e18,
+        //         amount1Min: 0e18,
+        //         recipient: address(this),
+        //         deadline: block.timestamp
+        //     })
+        // );
 
 
        // _mint(marketingWallet, INITIAL_SUPPLY * MARKETING_BPS / 10_000);
@@ -629,9 +647,9 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
         //require(totalSupply == INITIAL_SUPPLY, "numbers don't add up");
 
         // So I don't have to deal with Uniswap when testing
-        // if (isTestnet()) {
-        //     _mint(address(msg.sender), 10_000 * 10**decimals);
-        // }
+        if (isTestnet()) {
+            _mint(address(msg.sender), 10_000 * 10**decimals);
+        }
 
         emit StealthLaunchEngaged();
     }
@@ -698,7 +716,7 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
     
         //유동성 추가
         pool = IUniswapV3Pool(
-            v3Factory.getPool(Address.WMATIC_TEST, Address.KLAY_TEST, fee)
+            v3Factory.getPool(Address.WMATIC_TEST, address(this), fee)
         );
         tickSpacing = pool.tickSpacing();
 
@@ -710,21 +728,37 @@ function sqrt(uint256 x) public pure returns (uint256 z) {
         int24 upperTick = curTick + (tickSpacing * 2);
 
 
-        nfpm.mint(
-                INonfungiblePositionManager.MintParams({
-                    token0: path[0],
-                    token1: path[1],
-                    fee: fee,
-                    tickLower: lowerTick,
-                    tickUpper: upperTick,
-                    amount0Desired: tokensForLiq,
-                    amount1Desired: 0e18,
-                    amount0Min: 0e18,
-                    amount1Min: 0e18,
-                    recipient: address(this),
-                    deadline: block.timestamp
-                })
-            );
+        // nfpm.mint(
+        //         INonfungiblePositionManager.MintParams({
+        //             token0: path[0],
+        //             token1: path[1],
+        //             fee: fee,
+        //             tickLower: lowerTick,
+        //             tickUpper: upperTick,
+        //             amount0Desired: tokensForLiq,
+        //             amount1Desired: 0e18,
+        //             amount0Min: 0e18,
+        //             amount1Min: 0e18,
+        //             recipient: address(this),
+        //             deadline: block.timestamp
+        //         })
+        //     );
+
+            nfpm.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: pool.token0(),
+                token1: pool.token1(),
+                fee: poolFee, //위에서 선언한 3000, poolFee로 바꿔도 되지 않아?
+                tickLower: lowerTick,
+                tickUpper: upperTick,
+                amount0Desired: tokensForLiq,
+                amount1Desired: 0,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp
+            })
+        );
        
             
         
