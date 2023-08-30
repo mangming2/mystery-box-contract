@@ -16,6 +16,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.s
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
+import "@uniswap/v3-core/contracts/libraries//FullMath.sol";
 
 
 
@@ -468,6 +469,7 @@ contract MysteryBoxGame is Ownable, ERC20  {
 // COMM:reserve1 * PRECISION * PRECISION overflow 일어날 수도 있어서 Uniswap FullMath.mulDiv 사용하는 거 추천
 // Computes the sqrt of the u64x96 fixed point price given the AMM reserves
 function encodePriceSqrt(uint256 reserve1, uint256 reserve0) public pure returns (uint160) {
+    return (sqrt(mulDiv(reserve1 , 1<<192 , reserve0)));
     return uint160(sqrt((reserve1 * PRECISION * PRECISION) / reserve0));
 }
 
