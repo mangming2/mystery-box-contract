@@ -26,6 +26,187 @@
 
 pragma solidity 0.8.19;
 
+// OpenZeppelin Contracts (last updated v4.7.0) (access/Ownable.sol)
+
+// OpenZeppelin Contracts v4.4.1 (utils/Context.sol)
+
+/**
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (an owner) that can be granted exclusive access to
+ * specific functions.
+ *
+ * By default, the owner account will be the one that deploys the contract. This
+ * can later be changed with {transferOwnership}.
+ *
+ * This module is used through inheritance. It will make available the modifier
+ * `onlyOwner`, which can be applied to your functions to restrict their use to
+ * the owner.
+ */
+abstract contract Ownable is Context {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor() {
+        _transferOwnership(_msgSender());
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        _checkOwner();
+        _;
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if the sender is not the owner.
+     */
+    function _checkOwner() internal view virtual {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
+    function renounceOwnership() public virtual onlyOwner {
+        _transferOwnership(address(0));
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction.
+     */
+    function _transferOwnership(address newOwner) internal virtual {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}
+
+// OpenZeppelin Contracts (last updated v4.6.0) (token/ERC20/IERC20.sol)
+
+/**
+ * @dev Interface of the ERC20 standard as defined in the EIP.
+ */
+interface IERC20 {
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Moves `amount` tokens from `from` to `to` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
+}
+
 /// @notice Modern and gas efficient ERC20 + EIP-2612 implementation.
 /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC20.sol)
 /// @author Modified from Uniswap (https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/UniswapV2ERC20.sol)
@@ -227,107 +408,6 @@ abstract contract ERC20 {
         }
 
         emit Transfer(from, address(0), amount);
-    }
-}
-
-// OpenZeppelin Contracts (last updated v4.7.0) (access/Ownable.sol)
-
-// OpenZeppelin Contracts v4.4.1 (utils/Context.sol)
-
-/**
- * @dev Provides information about the current execution context, including the
- * sender of the transaction and its data. While these are generally available
- * via msg.sender and msg.data, they should not be accessed in such a direct
- * manner, since when dealing with meta-transactions the account sending and
- * paying for execution may not be the actual sender (as far as an application
- * is concerned).
- *
- * This contract is only required for intermediate, library-like contracts.
- */
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
-    }
-
-    function _msgData() internal view virtual returns (bytes calldata) {
-        return msg.data;
-    }
-}
-
-/**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
- *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- */
-abstract contract Ownable is Context {
-    address private _owner;
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    /**
-     * @dev Initializes the contract setting the deployer as the initial owner.
-     */
-    constructor() {
-        _transferOwnership(_msgSender());
-    }
-
-    /**
-     * @dev Throws if called by any account other than the owner.
-     */
-    modifier onlyOwner() {
-        _checkOwner();
-        _;
-    }
-
-    /**
-     * @dev Returns the address of the current owner.
-     */
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
-
-    /**
-     * @dev Throws if the sender is not the owner.
-     */
-    function _checkOwner() internal view virtual {
-        require(owner() == _msgSender(), "Ownable: caller is not the owner");
-    }
-
-    /**
-     * @dev Leaves the contract without owner. It will not be possible to call
-     * `onlyOwner` functions anymore. Can only be called by the current owner.
-     *
-     * NOTE: Renouncing ownership will leave the contract without an owner,
-     * thereby removing any functionality that is only available to the owner.
-     */
-    function renounceOwnership() public virtual onlyOwner {
-        _transferOwnership(address(0));
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner.
-     */
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        _transferOwnership(newOwner);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Internal function without access restriction.
-     */
-    function _transferOwnership(address newOwner) internal virtual {
-        address oldOwner = _owner;
-        _owner = newOwner;
-        emit OwnershipTransferred(oldOwner, newOwner);
     }
 }
 
@@ -576,9 +656,6 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
     constructor() ERC20("MysteryBox Game Betting Token", "MYSTERY", 8) {
         if (isGoerli()) {
-            //goerli ether uniswap router
-            //router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-            //goerli ether susiswpa router
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
         } else if (isSepolia()) {
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
@@ -868,5 +945,276 @@ contract MysteryBoxGame is Ownable, ERC20 {
         }
 
         return true;
+    }
+}
+
+/**
+ * @title TelegramMysteryBox
+ * @dev Store funds for Mystery Box Game and distribute the winnings as games finish.
+ */
+contract TelegramMysteryBox is Ownable {
+
+    address public revenueWallet;
+
+    MysteryBoxGame public immutable bettingToken;
+
+    uint256 public immutable minimumBet;
+
+    // The amount to take as revenue, in basis points.
+    uint256 public immutable revenueBps;
+
+    // The amount to burn forever, in basis points.
+    uint256 public immutable burnBps;
+
+    // Map Telegram chat IDs to their games.
+    mapping(int64 => Game) public games;
+
+    // The Telegram chat IDs for each active game. Mainly used to
+    // abort all active games in the event of a catastrophe.
+    int64[] public activeTgGroups;
+
+    // Stores the amount each player has bet for a game.
+    event Bet(int64 tgChatId, address player, uint16 playerIndex, uint256 amount);
+
+    // Stores the amount each player wins for a game.
+    event Win(int64 tgChatId, address player, uint16 playerIndex, uint256 amount);
+
+    // Stores the amount the loser lost.
+    event Loss(int64 tgChatId, address player, uint16 playerIndex, uint256 amount);
+
+    // Stores the amount collected by the protocol.
+    event Revenue(int64 tgChatId, uint256 amount);
+
+    // Stores the amount burned by the protocol.
+    event Burn(int64 tgChatId, uint256 amount);
+
+    constructor(address payable _bettingToken, uint256 _minimumBet, uint256 _revenueBps, uint256 _burnBps, address _revenueWallet) {
+        revenueWallet = _revenueWallet;
+        revenueBps = _revenueBps;
+        burnBps = _burnBps;
+        bettingToken = MysteryBoxGame(_bettingToken);
+        minimumBet = _minimumBet;
+    }
+
+    struct Game {
+        uint256 roundSize;
+        uint256 minBet;
+
+        // This is a SHA-256 hash of the random number generated by the bot.
+        bytes32 hasedBombRoundIndex;
+
+        address[] players;
+        uint256[] bets;
+
+        bool inProgress;
+        uint16 loser;
+    }
+
+    /**
+     * @dev Check if there is a game in progress for a Telegram group.
+     * @param _tgChatId Telegram group to check
+     * @return true if there is a game in progress, otherwise false
+     */
+    function isGameInProgress(int64 _tgChatId) public view returns (bool) {
+        return games[_tgChatId].inProgress;
+    }
+
+    /**
+     * @dev Remove a Telegram chat ID from the array.
+     * @param _tgChatId Telegram chat ID to remove
+     */
+    function removeTgId(int64 _tgChatId) internal {
+        for (uint256 i = 0; i < activeTgGroups.length; i++) {
+            if (activeTgGroups[i] == _tgChatId) {
+                activeTgGroups[i] = activeTgGroups[activeTgGroups.length - 1];
+                activeTgGroups.pop();
+            }
+        }
+    }
+
+    /**
+     * @dev Create a new game. Transfer funds into escrow.
+     * @param _tgChatId Telegram group of this game
+     * @param _roundSize number of rounds in the game
+     * @param _minBet minimum bet to play
+     * @param _hasedBombRoundIndex which chamber the bullet is in
+     * @param _players participating players
+     * @param _bets each player's bet
+     * @return The updated list of bets.
+     */
+    function newGame(
+        int64 _tgChatId,
+        uint256 _roundSize,
+        uint256 _minBet,
+        bytes32 _hasedBombRoundIndex,
+        address[] memory _players,
+        uint256[] memory _bets) public onlyOwner returns (uint256[] memory) {
+        require(_roundSize >= 2, "Round size too small");
+        require(_players.length <= _roundSize, "Too many players for this size round");
+        require(_minBet >= minimumBet, "Minimum bet too small");
+        require(_players.length == _bets.length, "Players/bets length mismatch");
+        require(_players.length > 1, "Not enough players");
+        require(!isGameInProgress(_tgChatId), "There is already a game in progress");
+
+        // The bets will be capped so you can only lose what other
+        // players bet. The updated bets will be returned to the
+        // caller.
+        //
+        // O(N) by doing a prepass to sum all the bets in the
+        // array. Use the sum to modify one bet at a time. Replace
+        // each bet with its updated value.
+        uint256 betTotal = 0;
+        for (uint16 i = 0; i < _bets.length; i++) {
+            require(_bets[i] >= _minBet, "Bet is smaller than the minimum");
+            betTotal += _bets[i];
+        }
+        for (uint16 i = 0; i < _bets.length; i++) {
+            betTotal -= _bets[i];
+            if (_bets[i] > betTotal) {
+                _bets[i] = betTotal;
+            }
+            betTotal += _bets[i];
+
+            require(bettingToken.allowance(_players[i], address(this)) >= _bets[i], "Not enough allowance");
+            bool isSent = bettingToken.transferFrom(_players[i], address(this), _bets[i]);
+            require(isSent, "Funds transfer failed");
+
+            emit Bet(_tgChatId, _players[i], i, _bets[i]);
+        }
+
+        Game memory g;
+        g.roundSize = _roundSize;
+        g.minBet = _minBet;
+        g.hasedBombRoundIndex = _hasedBombRoundIndex;
+        g.players = _players;
+        g.bets = _bets;
+        g.inProgress = true;
+
+        games[_tgChatId] = g;
+        activeTgGroups.push(_tgChatId);
+
+        return _bets;
+    }
+
+    /**
+     * @dev Declare a loser of the game and pay out the winnings.
+     * @param _tgChatId Telegram group of this game
+     * @param _loser index of the loser
+     *
+     * There is also a string array that will be passed in by the bot
+     * containing labeled strings, for historical/auditing purposes:
+     *
+     * beta: The randomly generated number in hex.
+     *
+     * salt: The salt to append to beta for hashing, in hex.
+     *
+     * publickey: The VRF public key in hex.
+     *
+     * proof: The generated proof in hex.
+     *
+     * alpha: The input message to the VRF.
+     */
+    function endGame(
+        int64 _tgChatId,
+        uint16 _loser,
+        string[] calldata) public onlyOwner {
+        require(_loser != type(uint16).max, "Loser index shouldn't be the sentinel value");
+        require(isGameInProgress(_tgChatId), "No game in progress for this Telegram chat ID");
+
+        Game storage g = games[_tgChatId];
+
+        require(_loser < g.players.length, "Loser index out of range");
+        require(g.players.length > 1, "Not enough players");
+
+        g.loser = _loser;
+        g.inProgress = false;
+        removeTgId(_tgChatId);
+
+        // Parallel arrays
+        address[] memory winners = new address[](g.players.length - 1);
+        uint16[] memory winnersPlayerIndex = new uint16[](g.players.length - 1);
+
+        // The total bets of the winners.
+        uint256 winningBetTotal = 0;
+
+        // Filter out the loser and calc the total winning bets.
+        {
+            uint16 numWinners = 0;
+            for (uint16 i = 0; i < g.players.length; i++) {
+                if (i != _loser) {
+                    winners[numWinners] = g.players[i];
+                    winnersPlayerIndex[numWinners] = i;
+                    winningBetTotal += g.bets[i];
+                    numWinners++;
+                }
+            }
+        }
+
+        uint256 totalPaidWinnings = 0;
+        require(burnBps + revenueBps < 10_1000, "Total fees must be < 100%");
+
+        // The share of tokens to burn.
+        uint256 burnShare = g.bets[_loser] * burnBps / 10_000;
+
+        // The share left for the contract. This is an approximate
+        // value. The real value will be whatever is leftover after
+        // each winner is paid their share.
+        uint256 approxRevenueShare = g.bets[_loser] * revenueBps / 10_000;
+
+        bool isSent;
+        {
+            uint256 totalWinnings = g.bets[_loser] - burnShare - approxRevenueShare;
+
+            for (uint16 i = 0; i < winners.length; i++) {
+                uint256 winnings = totalWinnings * g.bets[winnersPlayerIndex[i]] / winningBetTotal;
+
+                isSent = bettingToken.transfer(winners[i], g.bets[winnersPlayerIndex[i]] + winnings);
+                require(isSent, "Funds transfer failed");
+
+                emit Win(_tgChatId, winners[i], winnersPlayerIndex[i], winnings);
+
+                totalPaidWinnings += winnings;
+            }
+        }
+
+        bettingToken.burn(burnShare);
+        emit Burn(_tgChatId, burnShare);
+
+        uint256 realRevenueShare = g.bets[_loser] - totalPaidWinnings - burnShare;
+        isSent = bettingToken.transfer(revenueWallet, realRevenueShare);
+        require(isSent, "Revenue transfer failed");
+        emit Revenue(_tgChatId, realRevenueShare);
+
+        require((totalPaidWinnings + burnShare + realRevenueShare) == g.bets[_loser], "Calculated winnings do not add up");
+    }
+
+    /**
+     * @dev Abort a game and refund the bets. Use in emergencies
+     *      e.g. bot crash.
+     * @param _tgChatId Telegram group of this game
+     */
+    function abortGame(int64 _tgChatId) public onlyOwner {
+        require(isGameInProgress(_tgChatId), "No game in progress for this Telegram chat ID");
+        Game storage g = games[_tgChatId];
+
+        for (uint16 i = 0; i < g.players.length; i++) {
+            bool isSent = bettingToken.transfer(g.players[i], g.bets[i]);
+            require(isSent, "Funds transfer failed");
+        }
+
+        g.inProgress = false;
+        removeTgId(_tgChatId);
+    }
+
+    /**
+     * @dev Abort all in progress games.
+     */
+    function abortAllGames() public onlyOwner {
+        // abortGame modifies activeTgGroups with each call, so
+        // iterate over a copy
+        int64[] memory _activeTgGroups = activeTgGroups;
+        for (uint256 i = 0; i < _activeTgGroups.length; i++) {
+            abortGame(_activeTgGroups[i]);
+        }
     }
 }
