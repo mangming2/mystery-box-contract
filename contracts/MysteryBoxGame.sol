@@ -589,7 +589,10 @@ contract MysteryBoxGame is Ownable, ERC20 {
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
         } else if(isMumbai()){
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
+        } else if(isBase()){
+            router = IUniswapV2Router02(0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891);
         }
+
          else {
             require(block.chainid == 1, "expected mainnet");
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
@@ -645,6 +648,10 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
     function isMumbai() public view returns (bool) {
         return block.chainid == 80001;
+    }
+
+    function isBase() public view returns (bool) {
+        return block.chainid == 8453;
     }
 
     function isTestnet() public view returns (bool) {
