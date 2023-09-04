@@ -2,6 +2,7 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import { config as dotenvConfig } from "dotenv";
 import { resolve } from "path";
+import "hardhat-gas-reporter";
 
 dotenvConfig({ path: resolve(__dirname, "./.env") });
 
@@ -19,6 +20,11 @@ const config: HardhatUserConfig = {
     apiKey: process.env.ETHERSCAN_API_KEY,
     //apiKey: process.env.POLYGONSCAN_API_KEY,
     //apiKey: process.env.BASESCAN_API_KEY,
+  },
+  gasReporter: {
+    currency: "ETH",
+    gasPrice: 100,
+    enabled: true,
   },
 
   networks: {

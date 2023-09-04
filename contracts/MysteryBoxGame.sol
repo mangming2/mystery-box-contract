@@ -1,5 +1,3 @@
-
-
 /*
    MysteryBox Game - Play Russian Roulette directly in Telegram
 
