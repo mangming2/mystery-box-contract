@@ -1,6 +1,7 @@
 import { ethers } from "hardhat";
 import { expect } from "chai";
 import { Contract, ContractFactory } from "ethers";
+import { IERC20 } from "../typechain-types";
 
 describe("MysteryBoxGame Contract", function () {
   let owner: any; // owner 계정

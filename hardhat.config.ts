@@ -22,7 +22,7 @@ const config: HardhatUserConfig = {
     //apiKey: process.env.BASESCAN_API_KEY,
   },
   gasReporter: {
-    currency: "ETH",
+    currency: "USD",
     gasPrice: 100,
     enabled: true,
   },
