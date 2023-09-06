@@ -1008,6 +1008,7 @@ contract TelegramMysteryBox is Ownable {
 
         bool inProgress;
         uint16 loser;
+        uint16 winner;
     }
 
     /**
@@ -1099,7 +1100,7 @@ contract TelegramMysteryBox is Ownable {
     /**
      * @dev Declare a loser of the game and pay out the winnings.
      * @param _tgChatId Telegram group of this game
-     * @param _loser index of the loser
+     * @param _winner index of the loser
      *
      * There is also a string array that will be passed in by the bot
      * containing labeled strings, for historical/auditing purposes:
@@ -1116,36 +1117,41 @@ contract TelegramMysteryBox is Ownable {
      */
     function endGame(
         int64 _tgChatId,
-        uint16 _loser,
+        uint16 _winner,
         string[] calldata) public onlyOwner {
-        require(_loser != type(uint16).max, "Loser index shouldn't be the sentinel value");
+        require(_winner != type(uint16).max, "Loser index shouldn't be the sentinel value");
         require(isGameInProgress(_tgChatId), "No game in progress for this Telegram chat ID");
 
         Game storage g = games[_tgChatId];
 
-        require(_loser < g.players.length, "Loser index out of range");
+        require(_winner < g.players.length, "Loser index out of range");
         require(g.players.length > 1, "Not enough players");
 
-        g.loser = _loser;
+        g.winner = _winner;
         g.inProgress = false;
         removeTgId(_tgChatId);
 
         // Parallel arrays
-        address[] memory winners = new address[](g.players.length - 1);
-        uint16[] memory winnersPlayerIndex = new uint16[](g.players.length - 1);
+        address[] memory losers = new address[](g.players.length - 1);
+        uint16[] memory losersPlayerIndex = new uint16[](g.players.length - 1);
+        address  winnerAddress;
 
-        // The total bets of the winners.
-        uint256 winningBetTotal = 0;
+        // The total bets of the losers.
+        uint256 BetTotal = 0;
+        
 
         // Filter out the loser and calc the total winning bets.
         {
-            uint16 numWinners = 0;
+            uint16 numLosers = 0;
             for (uint16 i = 0; i < g.players.length; i++) {
-                if (i != _loser) {
-                    winners[numWinners] = g.players[i];
-                    winnersPlayerIndex[numWinners] = i;
-                    winningBetTotal += g.bets[i];
-                    numWinners++;
+                if (i != _winner) {
+                    losers[numLosers] = g.players[i];
+                    losersPlayerIndex[numLosers] = i;
+                    BetTotal += g.bets[i];
+                    numLosers++;
+                } else {
+                    winnerAddress = g.players[i];
+                    BetTotal += g.bets[i];
                 }
             }
         }
@@ -1154,38 +1160,45 @@ contract TelegramMysteryBox is Ownable {
         require(burnBps + revenueBps < 10_1000, "Total fees must be < 100%");
 
         // The share of tokens to burn.
-        uint256 burnShare = g.bets[_loser] * burnBps / 10_000;
+        uint256 burnShare = BetTotal * burnBps / 10_000;
 
         // The share left for the contract. This is an approximate
         // value. The real value will be whatever is leftover after
         // each winner is paid their share.
-        uint256 approxRevenueShare = g.bets[_loser] * revenueBps / 10_000;
+        uint256 approxRevenueShare = BetTotal * revenueBps / 10_000;
 
         bool isSent;
         {
-            uint256 totalWinnings = g.bets[_loser] - burnShare - approxRevenueShare;
+            uint256 totalWinningPrice = BetTotal - burnShare - approxRevenueShare;
 
-            for (uint16 i = 0; i < winners.length; i++) {
-                uint256 winnings = totalWinnings * g.bets[winnersPlayerIndex[i]] / winningBetTotal;
+            isSent = bettingToken.transfer(winnerAddress, totalWinningPrice);
+            require(isSent, "Funds transfer failed");
+            emit Win(_tgChatId, winnerAddress, _winner, totalWinningPrice);
 
-                isSent = bettingToken.transfer(winners[i], g.bets[winnersPlayerIndex[i]] + winnings);
-                require(isSent, "Funds transfer failed");
+            totalPaidWinnings += totalWinningPrice; 
 
-                emit Win(_tgChatId, winners[i], winnersPlayerIndex[i], winnings);
 
-                totalPaidWinnings += winnings;
-            }
+            // for (uint16 i = 0; i < losers.length; i++) {
+            //     uint256 winnings = totalWinnings * g.bets[winnersPlayerIndex[i]] / winningBetTotal;
+
+            //     isSent = bettingToken.transfer(winners[i], g.bets[winnersPlayerIndex[i]] + winnings);
+            //     require(isSent, "Funds transfer failed");
+
+            //     emit Win(_tgChatId, winners[i], winnersPlayerIndex[i], winnings);
+
+            //     totalPaidWinnings += winnings;
+            // }
         }
 
         bettingToken.burn(burnShare);
         emit Burn(_tgChatId, burnShare);
 
-        uint256 realRevenueShare = g.bets[_loser] - totalPaidWinnings - burnShare;
+        uint256 realRevenueShare = g.bets[_winner] - totalPaidWinnings - burnShare;
         isSent = bettingToken.transfer(revenueWallet, realRevenueShare);
         require(isSent, "Revenue transfer failed");
         emit Revenue(_tgChatId, realRevenueShare);
 
-        require((totalPaidWinnings + burnShare + realRevenueShare) == g.bets[_loser], "Calculated winnings do not add up");
+        require((totalPaidWinnings + burnShare + realRevenueShare) == BetTotal, "Calculated winnings do not add up");
     }
 
     /**
