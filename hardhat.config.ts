@@ -44,17 +44,19 @@ const config: HardhatUserConfig = {
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
+    "base-goerli": {
+      url: process.env.BASE_GOERLI_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 84531,
+      gasPrice: 1000000000,
+    },
     "base-mainnet": {
       url: "https://mainnet.base.org",
       accounts: [process.env.PRIVATE_KEY as string],
       gasPrice: 1000000000,
     },
-    // for testnet
-    "base-goerli": {
-      url: "https://goerli.base.org",
-      accounts: [process.env.PRIVATE_KEY as string],
-      gasPrice: 1000000000,
-    },
+
     // for local dev environment
     "base-local": {
       url: "http://localhost:8545",

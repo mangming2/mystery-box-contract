@@ -584,6 +584,8 @@ contract MysteryBoxGame is Ownable, ERC20 {
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
         } else if(isBase()){
             router = IUniswapV2Router02(0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891);
+        } else if(isBaseGoerli()){
+            router = IUniswapV2Router02(0x2626664c2603336E57B271c5C0b26F421741e481);
         }
 
          else {
@@ -633,6 +635,10 @@ contract MysteryBoxGame is Ownable, ERC20 {
 
     function isGoerli() public view returns (bool) {
         return block.chainid == 5;
+    }
+
+    function isBaseGoerli() public view returns (bool){
+        return block.chainid == 84531;
     }
 
     function isSepolia() public view returns (bool) {

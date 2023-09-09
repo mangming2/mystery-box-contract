@@ -1101,24 +1101,12 @@ contract TelegramMysteryBox is Ownable {
      * @dev Declare a loser of the game and pay out the winnings.
      * @param _tgChatId Telegram group of this game
      * @param _winner index of the loser
-     *
-     * There is also a string array that will be passed in by the bot
-     * containing labeled strings, for historical/auditing purposes:
-     *
-     * beta: The randomly generated number in hex.
-     *
-     * salt: The salt to append to beta for hashing, in hex.
-     *
-     * publickey: The VRF public key in hex.
-     *
-     * proof: The generated proof in hex.
-     *
-     * alpha: The input message to the VRF.
+     * @param _winningRound index of the winning round
      */
     function endGame(
         int64 _tgChatId,
         uint16 _winner,
-        string[] calldata) public onlyOwner {
+        string memory _winningRound) public onlyOwner {
         require(_winner != type(uint16).max, "Loser index shouldn't be the sentinel value");
         require(isGameInProgress(_tgChatId), "No game in progress for this Telegram chat ID");
 
